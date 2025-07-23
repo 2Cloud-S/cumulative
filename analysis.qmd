@@ -1,0 +1,116 @@
+---
+title: "Cumulative"
+format: html
+author: "Afnan Khan"
+execute: 
+  echo: false
+---
+
+```{r setup}
+#| message: false
+library(tidyverse)
+library(primer.data)
+library(broom)
+library(MASS)
+library(gt)
+library(dplyr)
+library(marginaleffects)
+library(ggplot2)
+```
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)  # for drop_na()
+
+x <- ces |>
+  filter(year == 2020) |>
+  dplyr::select(approval, education, faminc, ideology) |>
+  drop_na() |>
+  slice_sample(n = 2000)
+
+```
+
+**Visualization**
+
+```{r}
+x |>
+  count(ideology, approval) |>
+  group_by(ideology) |>
+  mutate(share = n / sum(n)) |>
+  ggplot(aes(x = ideology, y = share, fill = approval)) +
+  geom_col(position = "fill") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_brewer(palette = "RdYlBu", direction = -1) +
+  labs(
+    title = "Presidential Approval by Political Ideology",
+    subtitle = "More conservative Americans tend to express higher approval of the president",
+    x = "Political Ideology",
+    y = "Share of Responses (Percent)",
+    fill = "Approval Rating",
+    caption = "Source: 2020 Cooperative Election Study"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(margin = margin(b = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    legend.position = "bottom"
+  )
+
+```
+
+
+**Summary**
+
+Public opinion about political leaders often depends on where people fall on the ideological spectrum. Using data from the 2020 Cooperative Election Study, one of the largest political surveys in the U.S., we explore how presidential approval varies across different ideological groups. One concern is that survey respondents might be systematically different from other Americans. We model presidential approval as an ordinal function of a respondent’s ideology and education level, using an ordinal logistic regression approach.
+
+
+```{r}
+fit_approval <- polr(approval ~ ideology + education, data = x, Hess = TRUE)
+
+```
+
+**Regression Results Table**
+
+```{r}
+model_results <- tidy(fit_approval, conf.int = TRUE)
+
+model_results |>
+  dplyr::select(term, estimate, conf.low, conf.high) |>
+  gt() |>
+  tab_header(
+    title = "Ordinal Logistic Regression Results",
+    subtitle = "Predicting Approval from Ideology and Education"
+  ) |>
+  fmt_number(columns = c(estimate, conf.low, conf.high), decimals = 3)
+
+```
+
+**Model Equation**
+
+$$
+\log\left(\frac{P(Y \leq k)}{P(Y > k)}\right) = \theta_k - (\beta_1 X_1 + \beta_2 X_2 + \cdots + \beta_p X_p)
+$$
+
+$$
+\begin{aligned}
+\log\left( \frac{P(\hat{Y} \leq k)}{P(\hat{Y} > k)} \right) =\ 
+& \theta_k 
+- \left(
+0.615 \cdot \text{ideology}_{\text{Liberal}} +
+2.398 \cdot \text{ideology}_{\text{Moderate}} +
+4.455 \cdot \text{ideology}_{\text{Conservative}} +
+5.446 \cdot \text{ideology}_{\text{Very Conservative}} \right. \\
+& \left.
+- 0.096 \cdot \text{education}_{\text{High School Graduate}} 
+- 0.311 \cdot \text{education}_{\text{Some College}} 
+- 0.325 \cdot \text{education}_{\text{2-Year}} \right. \\
+& \left.
+- 0.521 \cdot \text{education}_{\text{4-Year}} 
+- 0.727 \cdot \text{education}_{\text{Post-Grad}}
+\right)
+\end{aligned}
+$$
